@@ -7,32 +7,34 @@
 #include <time.h>
 #include <pthread.h>
 #include <openssl/sha.h>
+#include <alloca.h>
 
 /* Function prototypes */
 
-const int ITERS = 10000000;
-const int DIFFICULTY = 1;
+long long int ITERS = 0;
+const int DIFFICULTY = 3;
 
-#define THREAD_COUNT 1
+#define THREAD_COUNT 12
 
 struct thread_arg_t
 {
     int t_id;
     int difficulty;
     unsigned char digest[20];
-    uint32_t msg[5];
+    unsigned char msg[20];
 };
 
 bool HASH_FOUND = false;
 
-void toHex(char* input)
+pthread_mutex_t mt;
+
+char* toHex(char* input, char* output)
 {
-    char digest[41];
 	for (int i = 0; i < 20; i += 1) {
-		snprintf(&digest[2 * i], 3, "%02x", input[i]&0xff);
+		snprintf(&output[2 * i], 3, "%02x", input[i]&0xff);
 	}
-    digest[40] = '\0';
-    printf("%s\n", digest);
+    output[40] = '\0';
+    return output;
 }
 
 void* hasher(void* arg)
@@ -40,32 +42,33 @@ void* hasher(void* arg)
     struct thread_arg_t* t_arg = (struct thread_arg_t*)arg;
 
     printf("Starting thread: %d\n", t_arg->t_id);
-    unsigned char output[20];
-    char hex[20];
     long long int i = t_arg->t_id;
 
-    unsigned char msg[20] = {0};
+    char outputmsg[41];
+    char outputhsh[41];
 
     while (!HASH_FOUND)
     {
-        SHA1((unsigned char*)t_arg->msg, strlen((const char *)t_arg->msg), t_arg->digest);
-        //SHA1(msg, strlen(msg), t_arg->digest);
-        printf("Nonce is: %s\n", msg);
-        toHex(t_arg->digest);
-        printf("\n");
+        SHA1(t_arg->msg, 20, t_arg->digest);
 
+        //printf("Message is: %s; Hash is: %s\n", toHex(t_arg->msg, outputmsg), toHex(t_arg->digest, outputhsh));
         if (!memcmp(t_arg->digest, &(int){0}, t_arg->difficulty))
         {
             HASH_FOUND = true;
-            printf("Message is: %s; Hash is: %s", (char*)t_arg->msg, t_arg->digest);
+            printf("Message is: %s; Hash is: %s\n", toHex((char*)t_arg->msg, (char*)outputmsg), toHex((char*)t_arg->digest, (char*)outputhsh));
         }
         else
-        {
-            //(int)t_arg->msg[4]++;
-            msg += 0x01;
+        {           
+            (*(uint64_t*)&(t_arg->msg[12]))++;
+            pthread_mutex_lock(&mt);
+            ITERS++;
+            if (ITERS %1000000 == 0)
+            {
+                printf("%lld Iterations. Calculating ...\n", ITERS);
+            }
+            pthread_mutex_unlock(&mt);
             i+=THREAD_COUNT;
         }
-        
     }
     return NULL;
 }
@@ -79,14 +82,15 @@ int main(void) {
 	
     clock_t start_time = clock();
 
-    struct thread_arg_t arg;
+    pthread_mutex_init(&mt, NULL);
 
     for (int i = 0; i < THREAD_COUNT; i++)
     {
-        arg.difficulty = DIFFICULTY;
-        arg.t_id = i;
-        memset(arg.msg, 0x0, 20);
-        pthread_create(&threads[i], NULL, hasher, &arg);
+        struct thread_arg_t* arg = alloca(sizeof(struct thread_arg_t));
+        arg->difficulty = DIFFICULTY;
+        arg->t_id = i;
+        memset(arg->msg, 0, 20);
+        pthread_create(&threads[i], NULL, hasher, arg);
     }
 
     for (size_t i = 0; i < THREAD_COUNT; i++)
