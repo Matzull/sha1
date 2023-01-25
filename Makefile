@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -g -pedantic -pthread -lcrypto -lssl
+CFLAGS = -Wall -g -pedantic -pthread -lcrypto -lssl -O3
 
 PROG = sha1
 OBJECTS = $(PROG).o

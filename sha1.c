@@ -14,7 +14,7 @@
 long long int ITERS = 0;
 const int DIFFICULTY = 3;
 
-#define THREAD_COUNT 12
+#define THREAD_COUNT 16
 
 struct thread_arg_t
 {
@@ -46,12 +46,19 @@ void* hasher(void* arg)
 
     char outputmsg[41];
     char outputhsh[41];
-
+    const unsigned char input_prefix[40] = {0}; 
+    SHA_CTX base_ctx;
+    SHA_CTX temp_ctx;
+    SHA1_Init(&base_ctx);
+    SHA1_Update(&base_ctx, input_prefix, 40);
     while (!HASH_FOUND)
     {
-        SHA1(t_arg->msg, 20, t_arg->digest);
+        //SHA1(t_arg->msg, 20, t_arg->digest);
+        temp_ctx = base_ctx;
+        SHA1_Update(&temp_ctx, t_arg->msg, 20);
+        SHA1_Final(t_arg->digest, &temp_ctx);
 
-        //printf("Message is: %s; Hash is: %s\n", toHex(t_arg->msg, outputmsg), toHex(t_arg->digest, outputhsh));
+        printf("Message is: %s; Hash is: %s\n", toHex(t_arg->msg, outputmsg), toHex(t_arg->digest, outputhsh));
         if (!memcmp(t_arg->digest, &(int){0}, t_arg->difficulty))
         {
             HASH_FOUND = true;
@@ -68,6 +75,7 @@ void* hasher(void* arg)
             }
             pthread_mutex_unlock(&mt);
             i+=THREAD_COUNT;
+            usleep(10000);
         }
     }
     return NULL;
